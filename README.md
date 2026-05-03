@@ -84,19 +84,21 @@ The adjustable ranges are:
 
 **Figure 1:** Fire preset with the Liquid Glass control deck visible in the upper-left corner.
 
-![Figure 1: Fire preset](d1.png)
+![Figure 1: Fire preset](docs/d1.png)
 
 **Figure 2:** Water preset showing falling blue particles and the live HUD.
 
-![Figure 2: Water preset](d2.png)
+![Figure 2: Water preset](docs/d2.png)
 
 **Figure 3:** Dust preset showing the wider, slower ambient particle field.
 
-![Figure 3: Dust preset](d3.png)
+
+![Figure 3: Dust preset](docs/d3.png)
+
 
 The demo video is included with the project files:
 
-**Demo Video:** [demo.mov](media/demo.mov)
+**Demo Video:** [Demo.mov](docs/Demo.mov)
 
 ## Analysis of Work
 
