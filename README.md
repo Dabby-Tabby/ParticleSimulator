@@ -96,9 +96,9 @@ The adjustable ranges are:
 ![Figure 3: Dust preset](docs/d3.png)
 
 
-The demo video is included with the project files:
 
-**Demo Video:** [Demo.mov](docs/Demo.mov)
+**Demo Video:**
+https://youtu.be/dnsiDCSfgtY
 
 ## Analysis of Work
 
