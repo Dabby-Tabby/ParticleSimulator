@@ -9,13 +9,14 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var model = ParticleSimulationModel()
+    @State private var performanceMetrics = PerformanceMetrics()
 
     var body: some View {
         ZStack {
-            MetalView(configuration: model.configuration)
+            MetalView(configuration: model.configuration, performanceMetrics: performanceMetrics)
                 .ignoresSafeArea()
 
-            ParticleSimulatorOverlayView(model: model)
+            ParticleSimulatorOverlayView(model: model, performanceMetrics: performanceMetrics)
         }
     }
 }

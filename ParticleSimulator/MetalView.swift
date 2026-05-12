@@ -10,6 +10,7 @@ import MetalKit
 
 struct MetalView: NSViewRepresentable {
     let configuration: ParticleSimulationConfiguration
+    let performanceMetrics: PerformanceMetrics
 
     func makeNSView(context: Context) -> MTKView {
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -23,7 +24,11 @@ struct MetalView: NSViewRepresentable {
         view.enableSetNeedsDisplay = false
         view.isPaused = false
 
-        let renderer = Renderer(mtkView: view, configuration: configuration)
+        let renderer = Renderer(
+            mtkView: view,
+            configuration: configuration,
+            performanceMetrics: performanceMetrics
+        )
         view.delegate = renderer
 
         context.coordinator.renderer = renderer
@@ -45,5 +50,8 @@ struct MetalView: NSViewRepresentable {
 }
 
 #Preview {
-    MetalView(configuration: ParticleSimulationModel().configuration)
+    MetalView(
+        configuration: ParticleSimulationModel().configuration,
+        performanceMetrics: PerformanceMetrics()
+    )
 }

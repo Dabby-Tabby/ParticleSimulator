@@ -10,20 +10,24 @@ import SwiftUI
 
 struct ParticleOverlayLayoutView: View {
     @Bindable var model: ParticleSimulationModel
+    let performanceMetrics: PerformanceMetrics
+    private let panelSpacing: CGFloat = 14
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 20) {
+        HStack(alignment: .top, spacing: 20) {
+            VStack(alignment: .leading, spacing: panelSpacing) {
                 ParticleControlPanelView(model: model)
-                Spacer(minLength: 20)
-                SimulationStatusPanelView(configuration: model.configuration)
+                ParticleInspectorView(material: model.selectedMaterial)
             }
 
-            Spacer(minLength: 32)
+            Spacer(minLength: 20)
 
-            HStack(alignment: .bottom, spacing: 20) {
-                ParticleInspectorView(material: model.selectedMaterial)
-                Spacer(minLength: 20)
+            VStack(alignment: .trailing, spacing: panelSpacing) {
+                SimulationStatusPanelView(configuration: model.configuration)
+                PerformanceHUDView(
+                    metrics: performanceMetrics,
+                    tint: model.selectedMaterial.secondaryPanelTint
+                )
             }
         }
     }

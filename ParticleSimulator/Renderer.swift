@@ -14,19 +14,32 @@ final class Renderer: NSObject, MTKViewDelegate {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let pipelineState: MTLRenderPipelineState
+    private let computePipelineState: MTLComputePipelineState
 
     private var configuration: ParticleSimulationConfiguration
     private var particles: [Particle] = []
     private var particleBuffer: MTLBuffer?
+    private weak var performanceMetrics: PerformanceMetrics?
 
     private var lastTime: CFTimeInterval = CACurrentMediaTime()
+    private var frameIndex: UInt32 = 0
+    private var metricsSampleStartTime: CFTimeInterval = CACurrentMediaTime()
+    private var metricsFrameCount = 0
+    private var metricsFrameDurationTotal: CFTimeInterval = 0
+    private var metricsUpdateDurationTotal: CFTimeInterval = 0
+    private let metricsSampleInterval: CFTimeInterval = 0.5
 
-    init(mtkView: MTKView, configuration: ParticleSimulationConfiguration) {
+    init(
+        mtkView: MTKView,
+        configuration: ParticleSimulationConfiguration,
+        performanceMetrics: PerformanceMetrics?
+    ) {
         guard let device = mtkView.device else {
             fatalError("MTKView has no Metal device.")
         }
         self.device = device
         self.configuration = configuration
+        self.performanceMetrics = performanceMetrics
 
         guard let commandQueue = device.makeCommandQueue() else {
             fatalError("Could not create command queue.")
@@ -39,6 +52,9 @@ final class Renderer: NSObject, MTKViewDelegate {
 
         let vertexFunction = library.makeFunction(name: "particleVertex")
         let fragmentFunction = library.makeFunction(name: "particleFragment")
+        guard let computeFunction = library.makeFunction(name: "updateParticlesCompute") else {
+            fatalError("Could not find updateParticlesCompute Metal function.")
+        }
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
         pipelineDescriptor.label = "Particle Pipeline"
@@ -58,8 +74,9 @@ final class Renderer: NSObject, MTKViewDelegate {
 
         do {
             pipelineState = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            computePipelineState = try device.makeComputePipelineState(function: computeFunction)
         } catch {
-            fatalError("Failed to create render pipeline state: \(error)")
+            fatalError("Failed to create Metal pipeline state: \(error)")
         }
 
         super.init()
@@ -69,8 +86,18 @@ final class Renderer: NSObject, MTKViewDelegate {
 
     func update(configuration: ParticleSimulationConfiguration) {
         guard self.configuration != configuration else { return }
+
+        let shouldRebuildParticleSystem =
+            self.configuration.material != configuration.material ||
+            self.configuration.particleCount != configuration.particleCount ||
+            self.configuration.particleSize != configuration.particleSize ||
+            self.configuration.velocityScale != configuration.velocityScale
+
         self.configuration = configuration
-        rebuildParticleSystem()
+
+        if shouldRebuildParticleSystem {
+            rebuildParticleSystem()
+        }
     }
 
     private func rebuildParticleSystem() {
@@ -84,14 +111,6 @@ final class Renderer: NSObject, MTKViewDelegate {
         makeParticleBuffer()
         uploadParticlesToGPU()
         lastTime = CACurrentMediaTime()
-    }
-
-    private func respawnParticle(at index: Int) {
-        configuration.material.respawn(
-            &particles[index],
-            baseSize: configuration.particleSize,
-            velocityScale: configuration.velocityScale
-        )
     }
 
     private func makeParticleBuffer() {
@@ -112,34 +131,87 @@ final class Renderer: NSObject, MTKViewDelegate {
         }
     }
 
-    private func updateParticles(deltaTime dt: Float) {
+    private func makeSimulationUniforms(deltaTime dt: Float) -> ParticleSimulationUniforms {
         let material = configuration.material
         let dragFactor = max(0, 1 - material.drag * dt)
         let sizeFactor = max(0.75, 1 - material.sizeDecayRate * dt)
+        let environmentAcceleration = SIMD2<Float>(
+            configuration.windStrength * material.windResponse,
+            material.acceleration.y * configuration.gravityScale
+        )
 
-        for i in particles.indices {
-            particles[i].life -= dt
+        return ParticleSimulationUniforms(
+            environmentAcceleration: environmentAcceleration,
+            deltaTime: dt,
+            dragFactor: dragFactor,
+            sizeFactor: sizeFactor,
+            minimumSize: material.minimumSize,
+            minimumAlpha: material.minimumAlpha,
+            baseSize: configuration.particleSize,
+            velocityScale: configuration.velocityScale,
+            materialID: material.gpuPresetID,
+            particleCount: UInt32(particles.count),
+            frameIndex: frameIndex
+        )
+    }
 
-            if particles[i].life <= 0 {
-                respawnParticle(at: i)
-                continue
-            }
+    private func encodeParticleUpdate(commandBuffer: MTLCommandBuffer, deltaTime dt: Float) {
+        guard let particleBuffer, !particles.isEmpty else { return }
+        guard let computeEncoder = commandBuffer.makeComputeCommandEncoder() else { return }
 
-            particles[i].position += particles[i].velocity * dt
-            particles[i].velocity += material.acceleration * dt
-            particles[i].velocity *= dragFactor
+        var uniforms = makeSimulationUniforms(deltaTime: dt)
+        let threadCount = MTLSize(width: particles.count, height: 1, depth: 1)
+        let threadgroupWidth = min(256, computePipelineState.maxTotalThreadsPerThreadgroup)
+        let threadsPerThreadgroup = MTLSize(width: threadgroupWidth, height: 1, depth: 1)
 
-            let t = max(particles[i].life / particles[i].maxLife, 0)
-            particles[i].color.w = max(material.minimumAlpha, t)
+        computeEncoder.label = "Particle Simulation Compute Encoder"
+        computeEncoder.setComputePipelineState(computePipelineState)
+        computeEncoder.setBuffer(particleBuffer, offset: 0, index: 0)
+        computeEncoder.setBytes(
+            &uniforms,
+            length: MemoryLayout<ParticleSimulationUniforms>.stride,
+            index: 1
+        )
+        computeEncoder.dispatchThreads(threadCount, threadsPerThreadgroup: threadsPerThreadgroup)
+        computeEncoder.endEncoding()
 
-            particles[i].size = max(material.minimumSize, particles[i].size * sizeFactor)
+        frameIndex &+= 1
+    }
 
-            if material.isOutOfBounds(particles[i]) {
-                respawnParticle(at: i)
-            }
+    private func recordPerformanceSample(frameStartTime: CFTimeInterval, updateDuration: CFTimeInterval) {
+        guard let performanceMetrics else { return }
+
+        let now = CACurrentMediaTime()
+        let frameDuration = now - frameStartTime
+
+        metricsFrameCount += 1
+        metricsFrameDurationTotal += frameDuration
+        metricsUpdateDurationTotal += updateDuration
+
+        let sampleDuration = now - metricsSampleStartTime
+        guard sampleDuration >= metricsSampleInterval else { return }
+
+        let frameCount = max(metricsFrameCount, 1)
+        let framesPerSecond = Double(frameCount) / sampleDuration
+        let frameTimeMilliseconds = framesPerSecond > 0 ? 1000 / framesPerSecond : 0
+        let cpuFrameTimeMilliseconds = (metricsFrameDurationTotal / Double(frameCount)) * 1000
+        let cpuUpdateMilliseconds = (metricsUpdateDurationTotal / Double(frameCount)) * 1000
+        let particleCount = particles.count
+
+        DispatchQueue.main.async { [weak performanceMetrics] in
+            performanceMetrics?.update(
+                framesPerSecond: framesPerSecond,
+                frameTimeMilliseconds: frameTimeMilliseconds,
+                cpuFrameTimeMilliseconds: cpuFrameTimeMilliseconds,
+                cpuUpdateMilliseconds: cpuUpdateMilliseconds,
+                particleCount: particleCount
+            )
         }
 
-        uploadParticlesToGPU()
+        metricsSampleStartTime = now
+        metricsFrameCount = 0
+        metricsFrameDurationTotal = 0
+        metricsUpdateDurationTotal = 0
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -147,11 +219,12 @@ final class Renderer: NSObject, MTKViewDelegate {
     }
 
     func draw(in view: MTKView) {
+        let frameStartTime = CACurrentMediaTime()
+
         guard
             let drawable = view.currentDrawable,
             let passDescriptor = view.currentRenderPassDescriptor,
             let commandBuffer = commandQueue.makeCommandBuffer(),
-            let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor),
             let particleBuffer = particleBuffer
         else {
             return
@@ -161,7 +234,13 @@ final class Renderer: NSObject, MTKViewDelegate {
         let dt = Float(now - lastTime)
         lastTime = now
 
-        updateParticles(deltaTime: min(dt, 1.0 / 30.0))
+        let updateStartTime = CACurrentMediaTime()
+        encodeParticleUpdate(commandBuffer: commandBuffer, deltaTime: min(dt, 1.0 / 30.0))
+        let updateDuration = CACurrentMediaTime() - updateStartTime
+
+        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else {
+            return
+        }
 
         renderEncoder.setRenderPipelineState(pipelineState)
         renderEncoder.setVertexBuffer(particleBuffer, offset: 0, index: 0)
@@ -170,5 +249,7 @@ final class Renderer: NSObject, MTKViewDelegate {
 
         commandBuffer.present(drawable)
         commandBuffer.commit()
+
+        recordPerformanceSample(frameStartTime: frameStartTime, updateDuration: updateDuration)
     }
 }

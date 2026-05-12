@@ -1,84 +1,80 @@
 //
-//  SimulationStatusPanelView.swift
+//  PerformanceHUDView.swift
 //  ParticleSimulator
 //
-//  Created by Codex on 3/25/26.
+//  Created by Codex on 5/12/26.
 //
 
 import SwiftUI
 
-struct SimulationStatusPanelView: View {
-    let configuration: ParticleSimulationConfiguration
-
-    private var material: ParticleMaterial {
-        configuration.material
-    }
+struct PerformanceHUDView: View {
+    let metrics: PerformanceMetrics
+    let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("LIVE HUD")
+                Text("PERFORMANCE")
                     .font(.caption)
                     .bold()
                     .tracking(1.2)
                     .foregroundStyle(.secondary)
 
-                Label(material.displayName, systemImage: material.systemImage)
-                    .font(.title3.bold())
-                    .foregroundStyle(material.accent)
+                Text("Renderer Telemetry")
+                    .font(.headline.bold())
 
-                Text(material.summary)
-                    .font(.subheadline)
+                Text("CPU timing is sampled twice per second to avoid polluting the measurement.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 LabeledContent {
-                    Text(configuration.particleCountText)
+                    Text(metrics.fpsText)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                } label: {
+                    Label("FPS", systemImage: "speedometer")
+                }
+
+                LabeledContent {
+                    Text(metrics.frameTimeText)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                } label: {
+                    Label("Frame", systemImage: "timer")
+                }
+
+                LabeledContent {
+                    Text(metrics.cpuFrameTimeText)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                } label: {
+                    Label("CPU Frame", systemImage: "cpu")
+                }
+
+                LabeledContent {
+                    Text(metrics.cpuUpdateTimeText)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                } label: {
+                    Label("CPU Sim", systemImage: "waveform.path.ecg")
+                }
+
+                LabeledContent {
+                    Text(metrics.particleCountText)
                         .monospacedDigit()
                         .contentTransition(.numericText())
                 } label: {
                     Label("Particles", systemImage: "circle.grid.3x3.fill")
                 }
-
-                LabeledContent {
-                    Text(configuration.particleSizeText)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                } label: {
-                    Label("Point Size", systemImage: "circle.dotted")
-                }
-
-                LabeledContent {
-                    Text(configuration.velocityText)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                } label: {
-                    Label("Velocity", systemImage: "wind")
-                }
-
-                LabeledContent {
-                    Text(configuration.gravityText)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                } label: {
-                    Label("Gravity", systemImage: "arrow.down")
-                }
-
-                LabeledContent {
-                    Text(configuration.windText)
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                } label: {
-                    Label("Wind", systemImage: "arrow.left.and.right")
-                }
             }
             .font(.subheadline)
         }
         .frame(maxWidth: 280, alignment: .leading)
-        .simulatorGlassPanel(tint: material.secondaryPanelTint)
+        .simulatorGlassPanel(tint: tint)
     }
 }

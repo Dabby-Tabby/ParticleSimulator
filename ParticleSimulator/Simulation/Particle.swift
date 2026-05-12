@@ -16,3 +16,17 @@ struct Particle {
     var maxLife: Float
     var pad: Float = 0
 }
+
+struct ParticleSimulationUniforms {
+    var environmentAcceleration: SIMD2<Float>
+    var deltaTime: Float
+    var dragFactor: Float
+    var sizeFactor: Float
+    var minimumSize: Float
+    var minimumAlpha: Float
+    var baseSize: Float
+    var velocityScale: Float
+    var materialID: UInt32
+    var particleCount: UInt32
+    var frameIndex: UInt32
+}

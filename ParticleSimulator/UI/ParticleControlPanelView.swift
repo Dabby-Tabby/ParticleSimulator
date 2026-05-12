@@ -80,6 +80,38 @@ struct ParticleControlPanelView: View {
                     step: 0.05,
                     tint: model.selectedMaterial.accent
                 )
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Environmental Forces")
+                        .font(.caption)
+                        .bold()
+                        .foregroundStyle(.secondary)
+
+                    Text("Adjust the global pull and side draft without respawning the current particles.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                ParticleControlSliderView(
+                    title: "Gravity",
+                    valueText: model.gravityText,
+                    value: $model.gravityScale,
+                    range: model.gravityRange,
+                    step: 0.05,
+                    tint: model.selectedMaterial.accent
+                )
+
+                ParticleControlSliderView(
+                    title: "Wind",
+                    valueText: model.windText,
+                    value: $model.windStrength,
+                    range: model.windRange,
+                    step: 0.05,
+                    tint: model.selectedMaterial.accent
+                )
             }
 
             Divider()
