@@ -12,6 +12,8 @@ This was an individual project completed by Nicholas Watts.
 
 The project title is **GPU Particle System in Apple Metal for macOS**.
 
+## Demo : https://youtu.be/P2sM5BabBEA
+
 ## Problem Summary
 
 Particle systems are a common technique in computer graphics for representing effects that are difficult to model with rigid geometry, such as fire, smoke, sparks, dust, snow, water, and other natural phenomena. Instead of modeling one solid object, a particle system represents the effect as many small particles that each have properties such as position, velocity, color, size, and lifetime. When many particles are simulated and rendered together, they can create visually convincing effects.
@@ -104,9 +106,6 @@ The adjustable ranges are:
 **Figure 3:** Dust preset showing the wider, slower ambient particle field.
 
 ![Figure 3: Dust preset](docs/d3.png)
-
-**Demo Video:**
-https://youtu.be/dnsiDCSfgtY
 
 ## Analysis of Work
 
